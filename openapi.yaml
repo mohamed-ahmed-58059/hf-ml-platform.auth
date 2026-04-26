@@ -29,8 +29,6 @@ tags:
     description: User signup, login, session lifecycle.
   - name: API Keys
     description: User-owned API keys for programmatic access.
-  - name: Service Auth
-    description: Service-to-service authentication. Internal only.
   - name: Keys
     description: Public key distribution for downstream services.
   - name: Health
@@ -255,66 +253,6 @@ paths:
           description: |
             Returned for both "key does not exist" and "key belongs to another user" —
             distinguishing them would let an attacker enumerate valid key UUIDs.
-
-  /internal/v1/auth/token:
-    post:
-      tags: [Service Auth]
-      summary: Exchange service-client credentials for an access token
-      description: |
-        Service-to-service authentication. Validates `client_id` and `client_secret`
-        (bcrypt) against the `service_clients` table and issues a 15-minute RS256 JWT.
-
-        **Internal only** — the rate limiter's public ALB listener returns 404 for
-        `/internal/*` paths. This endpoint is reachable only from inside the VPC via
-        the rate limiter's internal listener on port 8080. The rate limiter strips the
-        `/internal` prefix before forwarding, so the service receives `/v1/auth/token`.
-
-        No cookies are set. The token is returned in the response body.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [client_id, client_secret]
-              properties:
-                client_id:
-                  type: string
-                  example: inference-service
-                client_secret:
-                  type: string
-      responses:
-        '200':
-          description: Token issued
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  access_token:
-                    type: string
-                    description: RS256 JWT
-                  expires_in:
-                    type: integer
-                    description: Seconds until expiry
-                    example: 900
-        '400':
-          description: Missing client_id or client_secret
-        '401':
-          description: Invalid credentials or revoked client
-
-  /internal/v1/auth/health:
-    get:
-      tags: [Health]
-      summary: Auth service liveness (internal)
-      description: Internal health endpoint, blocked from public traffic by the rate limiter.
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HealthResponse'
 
   /health:
     get:
