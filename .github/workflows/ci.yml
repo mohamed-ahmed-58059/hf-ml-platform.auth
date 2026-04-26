@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'feature/**', 'bugfix/**']
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  app:
+    name: App (Java)
+    if: |
+      github.repository == 'mohamed-ahmed-58059/hf-ml-platform.auth' &&
+      github.actor == 'mohamed-ahmed-58059'
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - uses: actions/setup-java@7a6d8a8234af8eb26422e24e3006232cccaa061b # v4.6.0
+        with:
+          java-version: "21"
+          distribution: temurin
+          cache: maven
+
+      - name: Build and test
+        run: ./mvnw verify -q
+
+  infra:
+    name: Infra (CDK)
+    if: |
+      github.repository == 'mohamed-ahmed-58059/hf-ml-platform.auth' &&
+      github.actor == 'mohamed-ahmed-58059'
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Install CDK CLI
+        run: npm install -g aws-cdk
+
+      - name: Install tox
+        run: pip install tox
+
+      - name: Run lint and tests
+        working-directory: infra
+        run: tox
+
+      - name: Install CDK dependencies
+        working-directory: infra
+        run: pip install -r requirements.txt
+
+      - name: Validate CDK stacks
+        working-directory: infra
+        run: cdk synth

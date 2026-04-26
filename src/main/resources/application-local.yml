@@ -1,0 +1,37 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/hf_platform
+    username: postgres
+    password: postgres
+
+app:
+  jwt:
+    private-key: |
+      -----BEGIN PRIVATE KEY-----
+      MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCvFV1U9rllz5Jk
+      AZGkxUDM2B095pdYqPBdHL9iwfD/+2dvxErq8a6KdoftqCAnuztdVyOk9c9f8gNW
+      rUPH9jMUsTQAMabS7moo81nfdExqbTx2QhukL35J42MJ/AdNGJvhuRYNKb3ciF/Q
+      1uu1ytGkC7bUMu7Aehezl6J5IpumVOW+QzVbD5l0XFjpX/9AhavfoBRARA9KRJnI
+      /80dbWHgv1MyhnZjGy7NiozZSahKBBW61VciHU76jl/UG0flhq+ksKb/gYbKt6ED
+      c1YA5TmcKdjAvBuw/EUBgD1DznJZZi4OoHIu/IvaSTHTq8NDoyDPWUKL3eB9+cK0
+      9IHGfB69AgMBAAECggEADIFSjybn0zoExcr9OlR9aPQhqIzFBWfcR9Dtvtxv0x9u
+      LKPg9FAf9uikPkkFHO6zp4UkY7FL5xmGfAUi7iVrUhXIYKArPxhuHC/Ux4/2BPRO
+      6SUWdim56TCfdQnbgqSYk6zQLU9XLdPOwNWXnykrQ+kzR+DoanZ9+rhApPV1bRHi
+      fSxKvIvlJb/bbK/erNYaK385CM3GkExHqrW1RFADQngZoaDdZAFjqeBaJ+osNAIV
+      8Q1c2vQPxdksmaxpHUkSbYxgxTwBtmQlXnoUlgrtpKJTLPWubN/DOuLaG0rOegg9
+      Gu2hsi1TK79nQBgyfx1Jk4vs+7Q6YP9VODdGG1pjgQKBgQDd6VtNuZzL+9vVc/0F
+      2I14Y21POdRpDfY6UtDQxQbxPhnCNNAM30ajFu3EDQ6t8BgJa6LrxmAFxphG+M7v
+      ngO3oetdY40aIoPe2uX9Z98nW7aygWOsgl577s75QmOVu+jOUkT2b2k/LGbvreNN
+      8rxY3PzJeQ/V/bvsVN5GUG+4PQKBgQDJ+n/FRp6Ay9z6/+oRAeAOGVjh5BZiUe9/
+      HTf4SI+pzRuOCyTMcomUQNTwtPzBw7DP8lpX+xMWQ5eIEqO11GyaP0JrXExsfUvg
+      UDSLSMK10UQ41MHzmPp4bcdpNtvnv7fy3tcYNFseR6CfB6D8ODUAE7aF79B73tI1
+      gZSSVq3ogQKBgDKAwEHBI1kdGZvLiOMCtLeYUTE9pQS/o7EEVfedT4Ypru0O3eaA
+      DfBh8Hy0yAl34dCLCYoFHKdT2iYUy+uml4v8MrePR3aSMlbOlJcGQ7gOXFblsYx6
+      Iwyrfbkmjclu+X2zJXS8SESTU13qwhdkTc8fg/xKK/t0goc3jVqNRc+1AoGASaXu
+      2ydh+oLbpCaW2fa+FUYG0++Qfe90jfxAgWcsA3WH26aSl34YTpfJTbAhDiJmIZ00
+      dipWDmM9KN/rFA1OQHxaor04HMMfXL7COhug7B1PbA2gX0vj4O/eq63WR83vrD63
+      XdsRcpwZpINqny17nfiSMIp+kfxw2BPU8ftrVIECgYA0bIbUpEeDfNVwU25oteur
+      J59Cm04ZS1ALdmnWOpMeQm5wTlAp3igh5BiJ8VJgxtmrJWqT8V+Z0QegKEkxeVE4
+      9g3olf7YyrlSr/iY0k2HouG92wYmY7v/+/vDgn76t3nIPnHDlkQmg4FF6hIinG3V
+      eagXCuw5rwmyqEr4wwOjEg==
+      -----END PRIVATE KEY-----

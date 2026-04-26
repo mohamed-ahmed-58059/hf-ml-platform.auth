@@ -1,0 +1,397 @@
+openapi: 3.1.0
+info:
+  title: hf-ml-platform Auth Service
+  version: 1.0.0
+  description: |
+    Identity and access management for the hf-ml-platform.
+
+    Issues RS256 JWTs and rotating refresh tokens for users, manages user-owned API keys,
+    and exchanges service-client credentials for short-lived JWTs.
+
+    All endpoints sit behind the rate limiter. Public endpoints are reachable from the
+    internet via CloudFront. Endpoints under `/internal/v1/` are only reachable from
+    inside the VPC — the rate limiter's public ALB listener returns 404 for any path
+    starting with `/internal/`.
+  license:
+    name: MIT
+
+servers:
+  - url: https://{cloudfront_domain}
+    description: Production (CloudFront)
+    variables:
+      cloudfront_domain:
+        default: replace-with-actual-cloudfront-domain.cloudfront.net
+  - url: http://localhost:3000
+    description: Local dev (rate limiter)
+
+tags:
+  - name: Authentication
+    description: User signup, login, session lifecycle.
+  - name: API Keys
+    description: User-owned API keys for programmatic access.
+  - name: Service Auth
+    description: Service-to-service authentication. Internal only.
+  - name: Keys
+    description: Public key distribution for downstream services.
+  - name: Health
+    description: Liveness probes.
+
+paths:
+  /v1/auth/signup:
+    post:
+      tags: [Authentication]
+      summary: Create a new user account
+      description: |
+        Creates a new user with the `free` tier. Passwords are hashed with bcrypt (cost 12).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CredentialRequest'
+      responses:
+        '201':
+          description: User created
+        '400':
+          description: Invalid email format or password shorter than 8 characters
+        '409':
+          description: Email already registered
+
+  /v1/auth/login:
+    post:
+      tags: [Authentication]
+      summary: Authenticate and start a session
+      description: |
+        Validates credentials and issues:
+        - `sid` cookie (session UUID, 7 day lifetime)
+        - `access_token` cookie (RS256 JWT, 15 min lifetime)
+        - `refresh_token` cookie (opaque, SHA-256 hashed in DB, 7 day lifetime, scoped to `Path=/v1/auth/refresh`)
+
+        All cookies are `HttpOnly`, `Secure`, `SameSite=Strict`. If a `sid` cookie is
+        already present and references an active session for the user, that session is
+        reused. Otherwise a new session is created. Sessions are capped at 10 per user;
+        oldest is evicted when the cap is hit.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CredentialRequest'
+      responses:
+        '200':
+          description: Authenticated. Cookies set.
+          headers:
+            Set-Cookie:
+              description: |
+                Three `Set-Cookie` headers are returned: `sid`, `access_token`, `refresh_token`.
+              schema:
+                type: string
+        '400':
+          description: Missing email or password
+        '401':
+          description: Invalid credentials
+
+  /v1/auth/refresh:
+    post:
+      tags: [Authentication]
+      summary: Rotate the refresh token
+      description: |
+        Reads the `refresh_token` cookie, validates it (SHA-256 hash lookup with
+        `SELECT FOR UPDATE`), checks for reuse, and issues a new access + refresh token pair.
+
+        **Reuse detection.** If the same refresh token is presented twice outside a
+        5-second grace period, the entire session is revoked (treated as token theft).
+        Within the grace period, concurrent requests get the same token back to handle
+        legitimate races (e.g., two browser tabs).
+      security:
+        - refreshCookie: []
+      responses:
+        '200':
+          description: Token rotated. New cookies set.
+        '401':
+          description: Refresh token missing, invalid, expired, or reuse detected
+
+  /v1/auth/logout:
+    post:
+      tags: [Authentication]
+      summary: End the current session
+      description: |
+        Reads the `sid` cookie, revokes the session and all its refresh tokens, clears
+        all auth cookies. Idempotent — returns 200 even if no session is found.
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Session ended (or no session present)
+
+  /v1/auth/logout-all:
+    post:
+      tags: [Authentication]
+      summary: End all sessions for the current user
+      description: |
+        Revokes every active session and refresh token for the authenticated user.
+        Useful after a password change or suspected compromise.
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        '200':
+          description: All sessions ended
+        '401':
+          description: Not authenticated
+
+  /v1/auth/public-key:
+    get:
+      tags: [Keys]
+      summary: Get the JWT signing public key
+      description: |
+        Returns the RSA public key used to verify access tokens. Downstream services
+        fetch this on startup and cache it. On JWT verification failure they re-fetch
+        once before returning 401 — this enables zero-downtime key rotation.
+      responses:
+        '200':
+          description: Public key in PEM format
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  public_key:
+                    type: string
+                    description: PEM-encoded RSA public key
+                    example: |
+                      -----BEGIN PUBLIC KEY-----
+                      MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...
+                      -----END PUBLIC KEY-----
+
+  /v1/auth/api-keys:
+    get:
+      tags: [API Keys]
+      summary: List the current user's active API keys
+      description: |
+        Returns metadata only — never the raw key. Raw keys are shown exactly once at
+        creation and not stored.
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        '200':
+          description: List of active API keys
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ApiKeyMetadata'
+        '401':
+          description: Not authenticated
+
+    post:
+      tags: [API Keys]
+      summary: Create a new API key
+      description: |
+        Creates a new API key for the authenticated user. The key inherits the user's
+        default tier — clients cannot self-assign a tier. The raw key is returned **once**
+        in the response and never stored. Only the SHA-256 hash is persisted.
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  description: User-chosen label for the key. Unique per user.
+                  example: my-laptop
+      responses:
+        '201':
+          description: API key created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  key:
+                    type: string
+                    description: Raw API key. Shown only once. Store it now.
+                    example: 7c8e3f9a4b2d1e5f...
+                  name:
+                    type: string
+        '400':
+          description: Missing or empty name
+        '401':
+          description: Not authenticated
+        '409':
+          description: Duplicate name or per-user key cap (10) exceeded
+
+  /v1/auth/api-keys/{id}:
+    delete:
+      tags: [API Keys]
+      summary: Revoke an API key
+      description: |
+        Marks the key as revoked and sets `revoked_at`. Soft delete — the row is kept
+        for audit until the cleanup job removes it.
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Revoked
+        '401':
+          description: Not authenticated
+        '403':
+          description: |
+            Returned for both "key does not exist" and "key belongs to another user" —
+            distinguishing them would let an attacker enumerate valid key UUIDs.
+
+  /internal/v1/auth/token:
+    post:
+      tags: [Service Auth]
+      summary: Exchange service-client credentials for an access token
+      description: |
+        Service-to-service authentication. Validates `client_id` and `client_secret`
+        (bcrypt) against the `service_clients` table and issues a 15-minute RS256 JWT.
+
+        **Internal only** — the rate limiter's public ALB listener returns 404 for
+        `/internal/*` paths. This endpoint is reachable only from inside the VPC via
+        the rate limiter's internal listener on port 8080. The rate limiter strips the
+        `/internal` prefix before forwarding, so the service receives `/v1/auth/token`.
+
+        No cookies are set. The token is returned in the response body.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [client_id, client_secret]
+              properties:
+                client_id:
+                  type: string
+                  example: inference-service
+                client_secret:
+                  type: string
+      responses:
+        '200':
+          description: Token issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+                    description: RS256 JWT
+                  expires_in:
+                    type: integer
+                    description: Seconds until expiry
+                    example: 900
+        '400':
+          description: Missing client_id or client_secret
+        '401':
+          description: Invalid credentials or revoked client
+
+  /internal/v1/auth/health:
+    get:
+      tags: [Health]
+      summary: Auth service liveness (internal)
+      description: Internal health endpoint, blocked from public traffic by the rate limiter.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /health:
+    get:
+      tags: [Health]
+      summary: Liveness probe
+      description: |
+        Used by ECS target group health checks. The rate limiter has its own `/health`
+        registered at the Express level; this endpoint serves the auth service's own
+        ALB target group health check directly.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+components:
+  schemas:
+    CredentialRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+
+    ApiKeyMetadata:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok]
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Send the access token as `Authorization: Bearer <jwt>`. RS256-signed.
+        Verify with the public key from `GET /v1/auth/public-key`.
+
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: access_token
+      description: |
+        Same JWT as `bearerAuth`, delivered via the `access_token` HttpOnly cookie set
+        by `POST /v1/auth/login`. Use this for browser-originated requests.
+
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: sid
+      description: |
+        Session UUID cookie. Used by `/v1/auth/logout` to identify which session to end.
+
+    refreshCookie:
+      type: apiKey
+      in: cookie
+      name: refresh_token
+      description: |
+        Opaque rotating refresh token. Cookie path is restricted to `/v1/auth/refresh`,
+        so it's only sent to that endpoint.

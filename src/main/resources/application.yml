@@ -1,0 +1,25 @@
+server:
+  port: ${PORT:8080}
+
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 5
+      connection-timeout: 30000
+  jpa:
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+
+app:
+  jwt:
+    access-token-expiry-seconds: 900
+    issuer: auth-service
+    audience: api
+  refresh-token:
+    expiry-days: 7
+  session:
+    max-per-user: 10
+  api-key:
+    max-per-user: 10
+  reuse-grace-period-seconds: 5
