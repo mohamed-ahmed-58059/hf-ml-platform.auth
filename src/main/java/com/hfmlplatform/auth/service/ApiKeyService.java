@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
 
@@ -69,8 +70,23 @@ public class ApiKeyService {
         });
     }
 
+    public ApiKeyVerification verify(String keyHashHex) {
+        byte[] hash;
+        try {
+            hash = HexFormat.of().parseHex(keyHashHex);
+        } catch (IllegalArgumentException e) {
+            throw new InvalidApiKeyException();
+        }
+        var apiKey = apiKeyRepository.findActiveByKeyHash(hash)
+                .orElseThrow(InvalidApiKeyException::new);
+        return new ApiKeyVerification(apiKey.getUser().getId(), apiKey.getTier().getName());
+    }
+
+    public record ApiKeyVerification(UUID userId, String tier) {}
+
     public static class TierNotFoundException extends RuntimeException {}
     public static class ApiKeyNotFoundException extends RuntimeException {}
     public static class ApiKeyCapExceededException extends RuntimeException {}
     public static class DuplicateKeyNameException extends RuntimeException {}
+    public static class InvalidApiKeyException extends RuntimeException {}
 }
