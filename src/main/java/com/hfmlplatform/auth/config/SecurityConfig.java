@@ -29,6 +29,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/v1/auth/signup").permitAll()
                 .requestMatchers(HttpMethod.POST, "/v1/auth/login").permitAll()
                 .requestMatchers(HttpMethod.POST, "/v1/auth/token").permitAll()
+                .requestMatchers(HttpMethod.POST, "/v1/auth/verify-api-key").permitAll()
                 .requestMatchers(HttpMethod.GET,  "/v1/auth/public-key").permitAll()
                 .requestMatchers(HttpMethod.GET,  "/health").permitAll()
                 .requestMatchers(HttpMethod.GET,  "/v1/auth/health").permitAll()

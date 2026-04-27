@@ -13,6 +13,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.OffsetDateTime;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -220,6 +221,61 @@ class ApiKeyServiceTest {
 
         assertTrue(!apiKey.getRevokedAt().isBefore(before));
         assertTrue(!apiKey.getRevokedAt().isAfter(after));
+    }
+
+    // --- verify ---
+
+    @Test
+    void verify_returnsUserIdAndTierName() {
+        UUID userId = UUID.randomUUID();
+        User user = new User();
+        try {
+            var f = User.class.getDeclaredField("id");
+            f.setAccessible(true);
+            f.set(user, userId);
+        } catch (Exception e) { fail(e); }
+
+        Tier tier = new Tier();
+        try {
+            var f = Tier.class.getDeclaredField("name");
+            f.setAccessible(true);
+            f.set(tier, "premium");
+        } catch (Exception e) { fail(e); }
+
+        ApiKey apiKey = new ApiKey();
+        apiKey.setUser(user);
+        apiKey.setTier(tier);
+
+        byte[] hash = new byte[32];
+        String hashHex = HexFormat.of().formatHex(hash);
+        when(apiKeyRepository.findActiveByKeyHash(hash)).thenReturn(Optional.of(apiKey));
+
+        var result = apiKeyService.verify(hashHex);
+
+        assertEquals(userId, result.userId());
+        assertEquals("premium", result.tier());
+    }
+
+    @Test
+    void verify_throwsWhenHashNotFound() {
+        byte[] hash = new byte[32];
+        String hashHex = HexFormat.of().formatHex(hash);
+        when(apiKeyRepository.findActiveByKeyHash(hash)).thenReturn(Optional.empty());
+
+        assertThrows(ApiKeyService.InvalidApiKeyException.class,
+                () -> apiKeyService.verify(hashHex));
+    }
+
+    @Test
+    void verify_throwsOnMalformedHex() {
+        assertThrows(ApiKeyService.InvalidApiKeyException.class,
+                () -> apiKeyService.verify("not-hex!"));
+    }
+
+    @Test
+    void verify_throwsOnOddLengthHex() {
+        assertThrows(ApiKeyService.InvalidApiKeyException.class,
+                () -> apiKeyService.verify("abc"));
     }
 
     // --- Helpers ---

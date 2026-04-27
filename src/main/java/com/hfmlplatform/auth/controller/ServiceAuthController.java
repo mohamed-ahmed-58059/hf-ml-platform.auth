@@ -1,5 +1,6 @@
 package com.hfmlplatform.auth.controller;
 
+import com.hfmlplatform.auth.service.ApiKeyService;
 import com.hfmlplatform.auth.service.ServiceAuthService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -15,9 +16,11 @@ import java.util.Map;
 public class ServiceAuthController {
 
     private final ServiceAuthService serviceAuthService;
+    private final ApiKeyService apiKeyService;
 
-    public ServiceAuthController(ServiceAuthService serviceAuthService) {
+    public ServiceAuthController(ServiceAuthService serviceAuthService, ApiKeyService apiKeyService) {
         this.serviceAuthService = serviceAuthService;
+        this.apiKeyService = apiKeyService;
     }
 
     @PostMapping("/token")
@@ -36,6 +39,25 @@ public class ServiceAuthController {
                     "expires_in", 900
             ));
         } catch (ServiceAuthService.InvalidClientException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+    }
+
+    @PostMapping("/verify-api-key")
+    public ResponseEntity<Map<String, Object>> verifyApiKey(@RequestBody Map<String, String> body) {
+        String keyHash = body.get("key_hash");
+
+        if (keyHash == null || keyHash.isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        try {
+            var result = apiKeyService.verify(keyHash);
+            return ResponseEntity.ok(Map.of(
+                    "user_id", result.userId().toString(),
+                    "tier", result.tier()
+            ));
+        } catch (ApiKeyService.InvalidApiKeyException e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
     }
