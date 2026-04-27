@@ -47,7 +47,7 @@ class ApiKeyServiceTest {
         User user = userWithTier();
 
         when(apiKeyRepository.findActiveByUser(user)).thenReturn(List.of());
-        when(apiKeyRepository.existsByUserAndName(user, "my-key")).thenReturn(false);
+        when(apiKeyRepository.existsByUserAndNameAndStatus(user, "my-key", "active")).thenReturn(false);
         when(tokenService.generateRawRefreshToken()).thenReturn("raw-api-key");
         when(tokenService.hashRefreshToken("raw-api-key")).thenReturn(new byte[32]);
 
@@ -63,7 +63,7 @@ class ApiKeyServiceTest {
         byte[] hash = new byte[32];
 
         when(apiKeyRepository.findActiveByUser(user)).thenReturn(List.of());
-        when(apiKeyRepository.existsByUserAndName(user, "my-key")).thenReturn(false);
+        when(apiKeyRepository.existsByUserAndNameAndStatus(user, "my-key", "active")).thenReturn(false);
         when(tokenService.generateRawRefreshToken()).thenReturn("raw-api-key");
         when(tokenService.hashRefreshToken("raw-api-key")).thenReturn(hash);
 
@@ -95,11 +95,23 @@ class ApiKeyServiceTest {
     }
 
     @Test
+    void createApiKey_allowsNameReuseAfterRevoke() throws Exception {
+        User user = userWithTier();
+
+        when(apiKeyRepository.findActiveByUser(user)).thenReturn(List.of());
+        when(apiKeyRepository.existsByUserAndNameAndStatus(user, "my-key", "active")).thenReturn(false);
+        when(tokenService.generateRawRefreshToken()).thenReturn("raw-api-key");
+        when(tokenService.hashRefreshToken(any())).thenReturn(new byte[32]);
+
+        assertDoesNotThrow(() -> apiKeyService.createApiKey(user, "my-key"));
+    }
+
+    @Test
     void createApiKey_throwsOnDuplicateKeyName() {
         User user = userWithTier();
 
         when(apiKeyRepository.findActiveByUser(user)).thenReturn(List.of());
-        when(apiKeyRepository.existsByUserAndName(user, "my-key")).thenReturn(true);
+        when(apiKeyRepository.existsByUserAndNameAndStatus(user, "my-key", "active")).thenReturn(true);
 
         assertThrows(ApiKeyService.DuplicateKeyNameException.class,
                 () -> apiKeyService.createApiKey(user, "my-key"));
@@ -115,7 +127,7 @@ class ApiKeyServiceTest {
                 .toList();
 
         when(apiKeyRepository.findActiveByUser(user)).thenReturn(nineKeys);
-        when(apiKeyRepository.existsByUserAndName(user, "my-key")).thenReturn(false);
+        when(apiKeyRepository.existsByUserAndNameAndStatus(user, "my-key", "active")).thenReturn(false);
         when(tokenService.generateRawRefreshToken()).thenReturn("raw-api-key");
         when(tokenService.hashRefreshToken(any())).thenReturn(new byte[32]);
 
