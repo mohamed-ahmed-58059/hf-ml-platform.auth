@@ -37,7 +37,7 @@ public class ApiKeyService {
             throw new ApiKeyCapExceededException();
         }
 
-        if (apiKeyRepository.existsByUserAndName(user, keyName)) {
+        if (apiKeyRepository.existsByUserAndNameAndStatus(user, keyName, "active")) {
             throw new DuplicateKeyNameException();
         }
 
@@ -70,6 +70,7 @@ public class ApiKeyService {
         });
     }
 
+    @Transactional(readOnly = true)
     public ApiKeyVerification verify(String keyHashHex) {
         byte[] hash;
         try {

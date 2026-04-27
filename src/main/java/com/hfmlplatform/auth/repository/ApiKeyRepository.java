@@ -17,5 +17,5 @@ public interface ApiKeyRepository extends JpaRepository<ApiKey, UUID> {
     @Query("SELECT k FROM ApiKey k WHERE k.user = :user AND k.status = 'active'")
     List<ApiKey> findActiveByUser(@Param("user") User user);
 
-    boolean existsByUserAndName(User user, String name);
+    boolean existsByUserAndNameAndStatus(User user, String name, String status);
 }
